@@ -1,7 +1,7 @@
 // Service worker приложения «Яблонька».
 // Хранит оболочку приложения (страницу и иконки), чтобы оно быстро открывалось.
 // Запросы к Google (распознавание и таблицы) не трогает — они всегда идут в интернет.
-const CACHE = 'yablonka-v1';
+const CACHE = 'yablonka-v3';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
