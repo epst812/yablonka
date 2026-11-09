@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Яблонька — остатки</title>
+<meta name="theme-color" content="#2f6b3a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Яблонька">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #f6f3ec;
+    --card: #ffffff;
+    --ink: #1f2a1f;
+    --muted: #6b7266;
+    --line: #e4dfd3;
+    --accent: #2f6b3a;
+    --accent-ink: #ffffff;
+    --accent-soft: #e5efe3;
+    --rec: #c8402f;
+    --rec-soft: #f8e1dc;
+    --warn: #8a5a00;
+    --warn-soft: #fbf0d6;
+    --err: #a3271a;
+    --err-soft: #fbe4e0;
+    --radius: 16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141814;
+      --card: #1d231d;
+      --ink: #eef1ea;
+      --muted: #a2aa9c;
+      --line: #2e362d;
+      --accent: #7fbf87;
+      --accent-ink: #0f1a10;
+      --accent-soft: #233225;
+      --rec: #ef6b58;
+      --rec-soft: #3a211c;
+      --warn: #e6b45a;
+      --warn-soft: #33291a;
+      --err: #ff8a7a;
+      --err-soft: #3a1f1b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 460px; margin: 0 auto; padding: calc(20px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .logo {
+    width: 36px; height: 36px; border-radius: 10px; background: var(--accent);
+    display: grid; place-items: center; color: var(--accent-ink); flex: none;
+  }
+  .brand { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+  .brand small { display: block; font-weight: 500; font-size: 13px; color: var(--muted); letter-spacing: 0; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px; margin-bottom: 14px;
+  }
+  h1 { font-size: 22px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lead { color: var(--muted); margin: 0 0 16px; font-size: 15px; }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  input[type=text] {
+    width: 100%; font: inherit; padding: 13px 14px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); outline: none;
+  }
+  input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font: inherit; font-weight: 600; padding: 11px 16px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); min-width: 64px;
+  }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn {
+    display: block; width: 100%; font: inherit; font-weight: 700; padding: 15px; border-radius: 14px;
+    border: 0; background: var(--accent); color: var(--accent-ink); cursor: pointer; margin-top: 20px;
+  }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .link { background: none; border: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+
+  .who { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .who b { display: block; font-size: 16px; }
+  .who span { color: var(--muted); font-size: 14px; }
+
+  .rec-area { text-align: center; padding: 26px 18px 22px; }
+  .mic {
+    width: 148px; height: 148px; border-radius: 50%; border: 0; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
+    margin: 4px auto 16px; position: relative; transition: transform .15s ease, background .2s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mic:active { transform: scale(0.97); }
+  .mic svg { width: 56px; height: 56px; }
+  .mic.recording { background: var(--rec); }
+  .mic.recording::after {
+    content: ""; position: absolute; inset: -10px; border-radius: 50%;
+    border: 3px solid var(--rec); opacity: .5; animation: pulse 1.4s ease-out infinite;
+  }
+  .mic.busy { background: var(--muted); cursor: default; }
+  @keyframes pulse { from { transform: scale(0.95); opacity: .6; } to { transform: scale(1.18); opacity: 0; } }
+  .timer { font-variant-numeric: tabular-nums; font-size: 28px; font-weight: 700; letter-spacing: 0.02em; min-height: 36px; }
+  .hint { color: var(--muted); font-size: 15px; margin-top: 4px; min-height: 22px; }
+  .spinner {
+    width: 44px; height: 44px; border-radius: 50%; border: 4px solid rgba(255,255,255,.35); border-top-color: #fff;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .result h2 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .heard { color: var(--muted); font-size: 14px; margin: 0 0 12px; font-style: italic; }
+  .items { list-style: none; padding: 0; margin: 0; }
+  .items li { display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); font-size: 16px; }
+  .items li:first-child { border-top: 0; }
+  .items b { font-variant-numeric: tabular-nums; }
+  .where { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .note { border-radius: 12px; padding: 12px 14px; font-size: 14px; margin-top: 10px; }
+  .note.warn { background: var(--warn-soft); color: var(--warn); }
+  .note.err { background: var(--err-soft); color: var(--err); }
+
+  .text-row { display: flex; gap: 8px; }
+  .text-row input { flex: 1; }
+  .text-row .btn { width: auto; margin: 0; padding: 0 18px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 14px; list-style: none; text-align: center; }
+  details summary::-webkit-details-marker { display: none; }
+  details[open] summary { margin-bottom: 10px; }
+  .stock-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .stock-head b { font-size: 16px; }
+  .stock-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .srow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .srow:first-child { border-top: 0; }
+  .srow .nm { font-size: 16px; }
+  .srow small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .srow input {
+    width: 92px; flex: none; font: inherit; font-weight: 700; text-align: center; padding: 10px 8px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); outline: none; font-variant-numeric: tabular-nums;
+  }
+  .srow input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .srow input.changed { border-color: var(--accent); background: var(--accent-soft); }
+  .note.ok { background: var(--accent-soft); color: var(--accent); }
+  .hidden { display: none !important; }
+  .center { text-align: center; color: var(--muted); padding: 40px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7c-2-2.5-6-2-7 1.5S6 19 9 20c1.2.4 2-.3 3-.3s1.8.7 3 .3c3-1 5-8 4-11.5S14 4.5 12 7z"/><path d="M12 7c0-2 1-3.5 3-4"/></svg>
+    </div>
+    <div class="brand">Яблонька<small>Учёт остатков</small></div>
+  </header>
+
+  <!-- Загрузка -->
+  <div id="loading" class="center">Загрузка…</div>
+
+  <!-- Регистрация -->
+  <section id="register" class="card hidden">
+    <h1 id="regTitle">Давайте познакомимся</h1>
+    <p class="lead">Это нужно один раз — потом страница вас запомнит.</p>
+    <label for="fio">Фамилия, имя, отчество</label>
+    <input id="fio" type="text" autocomplete="name" placeholder="Иванова Мария Петровна">
+    <label>Город</label>
+    <div id="cities" class="chips"></div>
+    <div id="branchBlock" class="hidden">
+      <label>Филиал</label>
+      <div id="branches" class="chips"></div>
+    </div>
+    <div id="regError" class="note err hidden"></div>
+    <button id="regBtn" class="btn" disabled>Готово</button>
+    <button id="regCancel" class="link hidden" style="display:block;margin:14px auto 0">Отмена</button>
+  </section>
+
+  <!-- Основной экран -->
+  <section id="main" class="hidden">
+    <div class="card who">
+      <div><b id="whoName"></b><span id="whoPlace"></span></div>
+      <button id="editBtn" class="link">Профиль</button>
+    </div>
+
+    <div class="card rec-area">
+      <button id="mic" class="mic" aria-label="Записать голосовое">
+        <svg id="micIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
+      </button>
+      <div id="timer" class="timer"></div>
+      <div id="hint" class="hint">Нажмите и назовите остатки</div>
+    </div>
+
+    <div id="result" class="card result hidden"></div>
+
+    <div id="stockCard" class="card">
+      <div class="stock-head">
+        <div><b>Изменить остатки</b><div id="stockSub" class="stock-sub">Исправьте количество вручную</div></div>
+        <button id="stockToggle" class="link">Открыть</button>
+      </div>
+      <div id="stockBody" class="hidden" style="margin-top:12px">
+        <div id="stockList"></div>
+        <div id="stockNote" class="note hidden"></div>
+        <button id="stockSave" class="btn" disabled>Сохранить</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>или написать текстом</summary>
+        <div class="text-row">
+          <input id="textInput" type="text" placeholder="Круассанов 7, йогурт 2">
+          <button id="textBtn" class="btn">Отправить</button>
+        </div>
+      </details>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const MAX_SECONDS = 60;
+  const $ = (id) => document.getElementById(id);
+  const show = (el, on) => el.classList.toggle('hidden', !on);
+
+  // ---------- ID устройства ----------
+  function deviceId() {
+    const KEY = 'yablonka_device_id';
+    let id = null;
+    try { id = localStorage.getItem(KEY); } catch (e) {}
+    if (!id) {
+      const rnd = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+      id = 'web-' + rnd;
+      try { localStorage.setItem(KEY, id); } catch (e) {}
+    }
+    return id;
+  }
+  const ID = deviceId();
+
+  // ---------- Вызовы сервера ----------
+  const ROUTES = {
+    getMe: ['/api/me', ['id']],
+    registerWorker: ['/api/register', ['id', 'fio', 'city', 'branch']],
+    sendVoice: ['/api/voice', ['id', 'audio']],
+    sendText: ['/api/voice', ['id', 'text']],
+    getStock: ['/api/stock', ['id']],
+    saveStock: ['/api/stock/save', ['id', 'items']]
+  };
+  // Адрес скрипта Google Apps Script (развертывание «Веб-приложение»)
+  const API_URL = 'https://script.google.com/macros/s/AKfycbxwUZqjBfAVChIKr7H89jjGEU1FaX4ups-Doyg_SELp7uVSmC1kIxznN6jCoFT3A_-LLQ/exec';
+
+  function call(fn) {
+    const args = Array.prototype.slice.call(arguments, 1);
+    const route = ROUTES[fn];
+    const body = {};
+    route[1].forEach(function (k, i) { body[k] = args[i]; });
+    // text/plain — чтобы браузер не делал предварительный CORS-запрос, который Google не поддерживает
+    return fetch(API_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ path: route[0], body: body })
+    })
+      .catch(function () { throw new Error('Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.'); })
+      .then(function (r) {
+        return r.json()
+          .catch(function () { throw new Error('Сервер ответил ' + r.status); })
+          .then(function (d) {
+            if (d.error) throw new Error(d.error);
+            return d;
+          });
+      });
+  }
+
+  // ---------- Состояние ----------
+  let cities = [];
+  let worker = null;
+  let pickCity = null;
+  let pickBranch = null;
+
+  function renderWho() {
+    $('whoName').textContent = worker.fio;
+    $('whoPlace').textContent = worker.city + ' · Филиал ' + worker.branch;
+  }
+
+  function openRegister(editing) {
+    $('regTitle').textContent = editing ? 'Изменить данные' : 'Давайте познакомимся';
+    show($('regCancel'), !!editing);
+    $('fio').value = editing && worker ? worker.fio : '';
+    pickCity = editing && worker ? cities.findIndex(function (c) { return c.name === worker.city; }) : null;
+    pickBranch = (pickCity !== null && pickCity >= 0) ? cities[pickCity].branches.indexOf(worker.branch) : null;
+    if (pickCity < 0) pickCity = null;
+    if (pickBranch < 0) pickBranch = null;
+    renderChoices();
+    show($('regError'), false);
+    show($('main'), false);
+    show($('register'), true);
+  }
+
+  function renderChoices() {
+    const cWrap = $('cities');
+    cWrap.innerHTML = '';
+    cities.forEach(function (c, i) {
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.type = 'button';
+      b.textContent = c.name;
+      b.setAttribute('aria-pressed', String(pickCity === i));
+      b.onclick = function () { pickCity = i; pickBranch = null; renderChoices(); };
+      cWrap.appendChild(b);
+    });
+    const bWrap = $('branches');
+    bWrap.innerHTML = '';
+    if (pickCity !== null) {
+      cities[pickCity].branches.forEach(function (br, j) {
+        const b = document.createElement('button');
+        b.className = 'chip';
+        b.type = 'button';
+        b.textContent = 'Филиал ' + br;
+        b.setAttribute('aria-pressed', String(pickBranch === j));
+        b.onclick = function () { pickBranch = j; renderChoices(); };
+        bWrap.appendChild(b);
+      });
+    }
+    show($('branchBlock'), pickCity !== null);
+    validate();
+  }
+
+  function validate() {
+    const words = $('fio').value.trim().split(/\s+/).filter(Boolean);
+    $('regBtn').disabled = !(words.length >= 2 && pickCity !== null && pickBranch !== null);
+  }
+  $('fio').addEventListener('input', validate);
+
+  $('regBtn').onclick = function () {
+    const btn = $('regBtn');
+    btn.disabled = true;
+    btn.textContent = 'Сохраняю…';
+    show($('regError'), false);
+    call('registerWorker', ID, $('fio').value.trim(), pickCity, pickBranch)
+      .then(function (r) {
+        worker = r.worker;
+        renderWho();
+        show($('register'), false);
+        show($('main'), true);
+      })
+      .catch(function (e) {
+        $('regError').textContent = e.message;
+        show($('regError'), true);
+      })
+      .then(function () { btn.textContent = 'Готово'; validate(); });
+  };
+  $('regCancel').onclick = function () { show($('register'), false); show($('main'), true); };
+  $('editBtn').onclick = function () { openRegister(true); };
+
+  // ---------- Запись голоса ----------
+  const mic = $('mic');
+  const micIcon = $('micIcon').outerHTML;
+  let recorder = null;
+  let chunks = [];
+  let stream = null;
+  let startedAt = 0;
+  let tick = null;
+  let busy = false;
+
+  function setMic(state) {
+    mic.classList.toggle('recording', state === 'rec');
+    mic.classList.toggle('busy', state === 'busy');
+    mic.innerHTML = state === 'busy' ? '<div class="spinner"></div>' : (state === 'rec'
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>'
+      : micIcon);
+    mic.setAttribute('aria-label', state === 'rec' ? 'Остановить запись' : 'Записать голосовое');
+  }
+
+  function fmt(sec) {
+    const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  mic.onclick = function () {
+    if (busy) return;
+    if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+    startRecording();
+  };
+
+  function startRecording() {
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      showError('Этот браузер не умеет записывать звук. Откройте страницу в Chrome или Safari, либо напишите остатки текстом ниже.');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
+      stream = s;
+      chunks = [];
+      recorder = new MediaRecorder(s);
+      recorder.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+      recorder.onstop = onStopped;
+      recorder.start();
+      startedAt = Date.now();
+      setMic('rec');
+      $('timer').textContent = '0:00';
+      $('hint').textContent = 'Говорите… нажмите ещё раз, чтобы отправить';
+      tick = setInterval(function () {
+        const sec = (Date.now() - startedAt) / 1000;
+        $('timer').textContent = fmt(sec);
+        if (sec >= MAX_SECONDS && recorder.state === 'recording') recorder.stop();
+      }, 250);
+    }).catch(function () {
+      showError('Нет доступа к микрофону. Разрешите микрофон для этой страницы в настройках браузера и попробуйте снова.');
+    });
+  }
+
+  function onStopped() {
+    clearInterval(tick);
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    const duration = (Date.now() - startedAt) / 1000;
+    const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) || 'audio/webm' });
+    if (duration < 0.8 || !blob.size) {
+      setMic('idle');
+      $('timer').textContent = '';
+      $('hint').textContent = 'Запись слишком короткая — попробуйте ещё раз';
+      return;
+    }
+    busy = true;
+    setMic('busy');
+    $('hint').textContent = 'Распознаю и записываю в таблицу…';
+    toWavBase64(blob)
+      .then(function (b64) { return call('sendVoice', ID, b64); })
+      .then(showResult)
+      .catch(function (e) { showError(e.message); })
+      .then(done);
+  }
+
+  function done() {
+    busy = false;
+    setMic('idle');
+    $('timer').textContent = '';
+    $('hint').textContent = 'Нажмите и назовите остатки';
+  }
+
+  // Любой формат записи (webm, mp4, ogg) → WAV 16 кГц моно → base64
+  function toWavBase64(blob) {
+    return blob.arrayBuffer().then(function (buf) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AC();
+      return new Promise(function (res, rej) { ctx.decodeAudioData(buf, res, rej); })
+        .then(function (decoded) {
+          if (ctx.close) ctx.close();
+          const rate = 16000;
+          const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+          const off = new OAC(1, Math.max(1, Math.ceil(decoded.duration * rate)), rate);
+          const src = off.createBufferSource();
+          src.buffer = decoded;
+          src.connect(off.destination);
+          src.start(0);
+          return new Promise(function (res) {
+            off.oncomplete = function (e) { res(e.renderedBuffer); };
+            const p = off.startRendering();
+            if (p && p.then) p.then(res);
+          });
+        })
+        .then(function (rendered) {
+          const pcm = rendered.getChannelData(0);
+          const rate = rendered.sampleRate;
+          const bytes = new Uint8Array(44 + pcm.length * 2);
+          const v = new DataView(bytes.buffer);
+          const w = function (o, s) { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+          w(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); w(8, 'WAVE');
+          w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+          v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+          w(36, 'data'); v.setUint32(40, pcm.length * 2, true);
+          for (let i = 0; i < pcm.length; i++) {
+            const x = Math.max(-1, Math.min(1, pcm[i]));
+            v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true);
+          }
+          let bin = '';
+          for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+          return btoa(bin);
+        });
+    });
+  }
+
+  // ---------- Текстом ----------
+  $('textBtn').onclick = function () {
+    const text = $('textInput').value.trim();
+    if (!text || busy) return;
+    busy = true;
+    setMic('busy');
+    $('hint').textContent = 'Записываю в таблицу…';
+    call('sendText', ID, text)
+      .then(function (r) { $('textInput').value = ''; showResult(r); })
+      .catch(function (e) { showError(e.message); })
+      .then(done);
+  };
+
+  // ---------- Результат ----------
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  function showResult(r) {
+    const box = $('result');
+    let html = '';
+    if (r.items && r.items.length) {
+      html += '<h2>✅ Записано в таблицу</h2>';
+      if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
+      html += '<ul class="items">' + r.items.map(function (i) {
+        return '<li><span>' + esc(i.name) + '</span><b>' + esc(i.quantity) + ' ' + esc(i.unit || '') + '</b></li>';
+      }).join('') + '</ul>';
+      if (r.sheet) html += '<div class="where">📍 ' + esc(r.sheet) + ' · ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) + '</div>';
+    } else {
+      html += '<h2>Ничего не записано</h2>';
+      if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
+    }
+    if (r.message) html += '<div class="note warn">' + esc(r.message) + '</div>';
+    html += '<button class="link" id="fixBtn" style="margin-top:12px">Исправить количество</button>';
+    box.innerHTML = html;
+    show(box, true);
+    $('fixBtn').onclick = function () { openStock(true); };
+    if (stockOpen) loadStock();
+  }
+
+  function showError(msg) {
+    const box = $('result');
+    if (/не найден/i.test(msg) && /регистрац/i.test(msg)) { openRegister(false); }
+    box.innerHTML = '<h2>⚠️ Не получилось</h2><div class="note err">' + esc(msg) + '</div>';
+    show(box, true);
+  }
+
+  // ---------- Изменить остатки ----------
+  let stockOpen = false;
+
+  function openStock(scroll) {
+    stockOpen = true;
+    show($('stockBody'), true);
+    $('stockToggle').textContent = 'Скрыть';
+    loadStock();
+    if (scroll) $('stockCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  $('stockToggle').onclick = function () {
+    if (stockOpen) {
+      stockOpen = false;
+      show($('stockBody'), false);
+      $('stockToggle').textContent = 'Открыть';
+    } else openStock(false);
+  };
+
+  function stockNote(kind, msg) {
+    const n = $('stockNote');
+    n.className = 'note ' + kind;
+    n.textContent = msg;
+    show(n, !!msg);
+  }
+
+  function loadStock() {
+    $('stockList').innerHTML = '<div class="center" style="padding:16px 0">Загрузка…</div>';
+    stockNote('', '');
+    return call('getStock', ID).then(renderStock).catch(function (e) {
+      $('stockList').innerHTML = '';
+      stockNote('err', e.message);
+    });
+  }
+
+  function renderStock(r) {
+    $('stockSub').textContent = r.sheet ? r.sheet + ' · исправьте количество вручную' : 'Исправьте количество вручную';
+    const list = $('stockList');
+    list.innerHTML = '';
+    (r.items || []).forEach(function (it) {
+      const row = document.createElement('div');
+      row.className = 'srow';
+      const meta = [it.updated, it.by].filter(Boolean).join(' · ');
+      row.innerHTML = '<div><div class="nm">' + esc(it.name) + '</div>' + (meta ? '<small>' + esc(meta) + '</small>' : '<small>ещё не заполнено</small>') + '</div>';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.inputMode = 'decimal';
+      inp.placeholder = '—';
+      inp.value = it.quantity;
+      inp.dataset.row = it.row;
+      inp.dataset.orig = it.quantity;
+      inp.setAttribute('aria-label', 'Количество: ' + it.name);
+      inp.addEventListener('input', function () {
+        inp.value = inp.value.replace(/[^0-9.,]/g, '');
+        inp.classList.toggle('changed', inp.value.trim() !== inp.dataset.orig);
+        updateSave();
+      });
+      row.appendChild(inp);
+      list.appendChild(row);
+    });
+    if (!(r.items || []).length) list.innerHTML = '<div class="stock-sub">На листе филиала нет позиций.</div>';
+    updateSave();
+  }
+
+  function changedRows() {
+    return Array.prototype.slice.call($('stockList').querySelectorAll('input'))
+      .filter(function (i) { return i.value.trim() !== '' && i.value.trim() !== i.dataset.orig; })
+      .map(function (i) { return { row: +i.dataset.row, quantity: i.value.trim() }; });
+  }
+
+  function updateSave() {
+    const n = changedRows().length;
+    $('stockSave').disabled = !n;
+    $('stockSave').textContent = n ? 'Сохранить (' + n + ')' : 'Сохранить';
+  }
+
+  $('stockSave').onclick = function () {
+    const items = changedRows();
+    if (!items.length) return;
+    const btn = $('stockSave');
+    btn.disabled = true;
+    btn.textContent = 'Сохраняю…';
+    call('saveStock', ID, items)
+      .then(function (r) {
+        renderStock(r);
+        stockNote('ok', '✅ Сохранено: ' + r.saved + ' ' + (r.saved === 1 ? 'позиция' : (r.saved < 5 ? 'позиции' : 'позиций')));
+      })
+      .catch(function (e) { stockNote('err', e.message); updateSave(); });
+  };
+
+  // ---------- Старт ----------
+  call('getMe', ID).then(function (r) {
+    cities = r.cities || [];
+    worker = r.worker;
+    show($('loading'), false);
+    if (worker) { renderWho(); show($('main'), true); }
+    else openRegister(false);
+  }).catch(function (e) {
+    $('loading').textContent = 'Не удалось загрузить: ' + e.message;
+  });
+})();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  }
+</script>
+</body>
+</html>
