@@ -146,6 +146,18 @@
   .srow input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .srow input.changed { border-color: var(--accent); background: var(--accent-soft); }
   .note.ok { background: var(--accent-soft); color: var(--accent); }
+  .install { display: flex; align-items: center; gap: 12px; }
+  .install .txt { flex: 1; min-width: 0; }
+  .install b { display: block; font-size: 15px; }
+  .install .btn { width: auto; margin: 0; padding: 11px 16px; flex: none; }
+  .install-steps { margin: 10px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink); }
+  .install-steps li { margin: 4px 0; }
+  .missing { margin-top: 14px; border-radius: 12px; padding: 14px; background: var(--warn-soft); color: var(--warn); }
+  .missing b { display: block; font-size: 15px; margin-bottom: 2px; }
+  .missing .sub { font-size: 13px; margin-bottom: 6px; }
+  .missing .srow { border-top-color: rgba(138, 90, 0, .18); color: var(--ink); }
+  .missing .srow input { background: var(--card); }
+  .missing .btn { margin-top: 12px; padding: 12px; }
   .hidden { display: none !important; }
   .center { text-align: center; color: var(--muted); padding: 40px 0; }
 </style>
@@ -158,6 +170,15 @@
     </div>
     <div class="brand">Яблонька<small>Учёт остатков</small></div>
   </header>
+
+  <!-- Установка приложения -->
+  <div id="installCard" class="card hidden" style="border-color:var(--accent);background:var(--accent-soft)">
+    <div class="install">
+      <div class="txt"><b>Установите приложение</b><span class="stock-sub" id="installSub">Иконка «Яблонька» появится на главном экране</span></div>
+      <button id="installBtn" class="btn">Установить</button>
+    </div>
+    <ol id="installSteps" class="install-steps hidden"></ol>
+  </div>
 
   <!-- Загрузка -->
   <div id="loading" class="center">Загрузка…</div>
@@ -512,11 +533,71 @@
       if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
     }
     if (r.message) html += '<div class="note warn">' + esc(r.message) + '</div>';
+    html += '<div id="missingBox"></div>';
     html += '<button class="link" id="fixBtn" style="margin-top:12px">Исправить количество</button>';
     box.innerHTML = html;
     show(box, true);
     $('fixBtn').onclick = function () { openStock(true); };
     if (stockOpen) loadStock();
+    if (r.sheet) checkMissing(r.items || []);
+  }
+
+  // ---------- Напоминание о пропущенных позициях ----------
+  function checkMissing(said) {
+    const saidNames = {};
+    said.forEach(function (i) { saidNames[String(i.name).trim().toLowerCase()] = true; });
+    call('getStock', ID).then(function (st) {
+      const missing = (st.items || []).filter(function (p) { return !saidNames[p.name.trim().toLowerCase()]; });
+      const box = $('missingBox');
+      if (!box || !missing.length) return;
+      let h = '<div class="missing" role="alert">';
+      h += '<b>⚠️ Вы не назвали: ' + missing.map(function (p) { return esc(p.name); }).join(', ') + '</b>';
+      h += '<div class="sub">Впишите количество ниже или запишите ещё одно голосовое.</div>';
+      h += missing.map(function (p) {
+        const meta = p.quantity !== '' ? 'было: ' + esc(p.quantity) + (p.updated ? ' · ' + esc(p.updated) : '') : 'ещё не заполнено';
+        return '<div class="srow"><div><div class="nm">' + esc(p.name) + '</div><small>' + meta + '</small></div>' +
+          '<input type="text" inputmode="decimal" placeholder="—" data-row="' + p.row + '" aria-label="Количество: ' + esc(p.name) + '"></div>';
+      }).join('');
+      h += '<button class="btn" id="missingSave">Сохранить</button><div id="missingNote" class="note hidden"></div></div>';
+      box.innerHTML = h;
+      let remaining = missing.slice();
+      try { if (navigator.vibrate) navigator.vibrate([120, 80, 120]); } catch (e) {}
+      Array.prototype.forEach.call(box.querySelectorAll('input'), function (inp) {
+        inp.addEventListener('input', function () { inp.value = inp.value.replace(/[^0-9.,]/g, ''); });
+      });
+      $('missingSave').onclick = function () {
+        const items = Array.prototype.slice.call(box.querySelectorAll('input'))
+          .filter(function (i) { return i.value.trim() !== ''; })
+          .map(function (i) { return { row: +i.dataset.row, quantity: i.value.trim() }; });
+        const note = $('missingNote');
+        if (!items.length) { note.className = 'note err'; note.textContent = 'Введите количество хотя бы для одной позиции.'; return; }
+        const btn = $('missingSave');
+        btn.disabled = true;
+        btn.textContent = 'Сохраняю…';
+        call('saveStock', ID, items).then(function (res) {
+          const savedRows = {};
+          items.forEach(function (i) { savedRows[i.row] = true; });
+          remaining = remaining.filter(function (p) { return !savedRows[p.row]; });
+          const left = remaining;
+          if (!left.length) {
+            box.innerHTML = '<div class="note ok">✅ Все позиции заполнены</div>';
+          } else {
+            btn.disabled = false;
+            btn.textContent = 'Сохранить';
+            items.forEach(function (i) { const el = box.querySelector('input[data-row="' + i.row + '"]'); if (el) el.closest('.srow').remove(); });
+            box.querySelector('b').textContent = '⚠️ Вы не назвали: ' + left.map(function (p) { return p.name; }).join(', ');
+            note.className = 'note ok';
+            note.textContent = '✅ Сохранено: ' + res.saved;
+          }
+          if (stockOpen) renderStock(res);
+        }).catch(function (e) {
+          btn.disabled = false;
+          btn.textContent = 'Сохранить';
+          note.className = 'note err';
+          note.textContent = e.message;
+        });
+      };
+    }).catch(function () {});
   }
 
   function showError(msg) {
@@ -629,6 +710,59 @@
 })();
 </script>
 <script>
+  // ---------- Установка приложения ----------
+  (function () {
+    var card = document.getElementById('installCard');
+    var btn = document.getElementById('installBtn');
+    var steps = document.getElementById('installSteps');
+    var deferred = null;
+    var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+    if (standalone) return;
+
+    var ua = navigator.userAgent;
+    var manual;
+    if (/SamsungBrowser/i.test(ua)) manual = ['Нажмите ≡ (меню) внизу справа', 'Выберите «Добавить страницу на» → «Главный экран»', 'Нажмите «Добавить»'];
+    else if (/YaBrowser/i.test(ua)) manual = ['Нажмите ⋮ (меню)', 'Выберите «Добавить ярлык» / «На главный экран»', 'Или откройте эту страницу в Chrome — там установка в одно нажатие'];
+    else if (/iPhone|iPad|iPod/i.test(ua)) manual = ['Откройте страницу в Safari', 'Нажмите «Поделиться» (квадрат со стрелкой)', 'Выберите «На экран Домой» → «Добавить»'];
+    else if (/Android/i.test(ua)) manual = ['Нажмите ⋮ (меню) справа вверху', 'Выберите «Установить приложение» или «Добавить на главный экран»', 'Нажмите «Установить»'];
+    else manual = ['Нажмите значок установки в адресной строке (монитор со стрелкой)', 'Или ⋮ → «Трансляция, сохранение и отправка» → «Установить страницу как приложение»'];
+
+    function showManual() {
+      steps.innerHTML = manual.map(function (t) { return '<li>' + t + '</li>'; }).join('');
+      steps.classList.remove('hidden');
+      btn.textContent = 'Скрыть';
+    }
+
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferred = e;
+      btn.textContent = 'Установить';
+      steps.classList.add('hidden');
+      card.classList.remove('hidden');
+    });
+
+    btn.onclick = function () {
+      if (deferred) {
+        deferred.prompt();
+        deferred.userChoice.then(function (c) { if (c && c.outcome === 'accepted') card.classList.add('hidden'); });
+        deferred = null;
+        return;
+      }
+      if (steps.classList.contains('hidden')) showManual();
+      else { steps.classList.add('hidden'); btn.textContent = 'Как установить'; }
+    };
+
+    window.addEventListener('appinstalled', function () { card.classList.add('hidden'); });
+
+    // Если браузер не предложил установку сам — показываем инструкцию
+    setTimeout(function () {
+      if (!deferred) {
+        btn.textContent = 'Как установить';
+        card.classList.remove('hidden');
+      }
+    }, 2500);
+  })();
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
