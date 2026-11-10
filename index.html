@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Яблонька — остатки</title>
+<title>Яблонька — списание</title>
 <meta name="theme-color" content="#2f6b3a">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Яблонька">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
+<link rel="icon" type="image/png" href="icons/favicon-48.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
   :root {
@@ -146,6 +146,15 @@
   .srow input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .srow input.changed { border-color: var(--accent); background: var(--accent-soft); }
   .note.ok { background: var(--accent-soft); color: var(--accent); }
+  .install { display: flex; align-items: center; gap: 12px; }
+  .install .txt { flex: 1; min-width: 0; }
+  .install b { display: block; font-size: 15px; }
+  .install .btn { width: auto; margin: 0; padding: 11px 16px; flex: none; }
+  .install-steps { margin: 10px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink); }
+  .install-steps li { margin: 4px 0; }
+  .search { margin-bottom: 6px; }
+  .stores { display: flex; flex-direction: column; gap: 8px; }
+  .stores .chip { text-align: left; border-radius: 12px; }
   .hidden { display: none !important; }
   .center { text-align: center; color: var(--muted); padding: 40px 0; }
 </style>
@@ -153,26 +162,31 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="logo" aria-hidden="true">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7c-2-2.5-6-2-7 1.5S6 19 9 20c1.2.4 2-.3 3-.3s1.8.7 3 .3c3-1 5-8 4-11.5S14 4.5 12 7z"/><path d="M12 7c0-2 1-3.5 3-4"/></svg>
-    </div>
-    <div class="brand">Яблонька<small>Учёт остатков</small></div>
+    <img src="icons/logo.png" alt="" width="61" height="36" style="height:36px;width:auto;flex:none;border-radius:6px;background:#fff">
+    <div class="brand">Яблонька<small>Учёт списания</small></div>
   </header>
+
+  <!-- Установка приложения -->
+  <div id="installCard" class="card hidden" style="border-color:var(--accent);background:var(--accent-soft)">
+    <div class="install">
+      <div class="txt"><b>Установите приложение</b><span class="stock-sub" id="installSub">Иконка «Яблонька» появится на главном экране</span></div>
+      <button id="installBtn" class="btn">Установить</button>
+    </div>
+    <ol id="installSteps" class="install-steps hidden"></ol>
+  </div>
 
   <!-- Загрузка -->
   <div id="loading" class="center">Загрузка…</div>
 
   <!-- Регистрация -->
   <section id="register" class="card hidden">
-    <h1 id="regTitle">Давайте познакомимся</h1>
-    <p class="lead">Это нужно один раз — потом страница вас запомнит.</p>
-    <label for="fio">Фамилия, имя, отчество</label>
-    <input id="fio" type="text" autocomplete="name" placeholder="Иванова Мария Петровна">
+    <h1 id="regTitle">Где вы работаете?</h1>
+    <p class="lead">Выберите город и точку. Это нужно один раз — потом приложение вас запомнит.</p>
     <label>Город</label>
     <div id="cities" class="chips"></div>
     <div id="branchBlock" class="hidden">
-      <label>Филиал</label>
-      <div id="branches" class="chips"></div>
+      <label>Точка</label>
+      <div id="branches" class="stores"></div>
     </div>
     <div id="regError" class="note err hidden"></div>
     <button id="regBtn" class="btn" disabled>Готово</button>
@@ -183,7 +197,7 @@
   <section id="main" class="hidden">
     <div class="card who">
       <div><b id="whoName"></b><span id="whoPlace"></span></div>
-      <button id="editBtn" class="link">Профиль</button>
+      <button id="editBtn" class="link">Сменить точку</button>
     </div>
 
     <div class="card rec-area">
@@ -191,17 +205,18 @@
         <svg id="micIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
       </button>
       <div id="timer" class="timer"></div>
-      <div id="hint" class="hint">Нажмите и назовите остатки</div>
+      <div id="hint" class="hint">Нажмите и назовите списание</div>
     </div>
 
     <div id="result" class="card result hidden"></div>
 
     <div id="stockCard" class="card">
       <div class="stock-head">
-        <div><b>Изменить остатки</b><div id="stockSub" class="stock-sub">Исправьте количество вручную</div></div>
+        <div><b>Изменить списание</b><div id="stockSub" class="stock-sub">Исправьте или добавьте вручную</div></div>
         <button id="stockToggle" class="link">Открыть</button>
       </div>
       <div id="stockBody" class="hidden" style="margin-top:12px">
+        <input id="stockSearch" class="search" type="text" placeholder="Найти товар…" autocomplete="off">
         <div id="stockList"></div>
         <div id="stockNote" class="note hidden"></div>
         <button id="stockSave" class="btn" disabled>Сохранить</button>
@@ -212,7 +227,7 @@
       <details>
         <summary>или написать текстом</summary>
         <div class="text-row">
-          <input id="textInput" type="text" placeholder="Круассанов 7, йогурт 2">
+          <input id="textInput" type="text" placeholder="Синнабон 3, эклер с заварным 2">
           <button id="textBtn" class="btn">Отправить</button>
         </div>
       </details>
@@ -239,11 +254,14 @@
     return id;
   }
   const ID = deviceId();
+  // Версия регистрации: при смене все проходят выбор точки заново
+  const REG_KEY = 'yablonka_reg_version';
+  const REG_VERSION = '2';
 
   // ---------- Вызовы сервера ----------
   const ROUTES = {
     getMe: ['/api/me', ['id']],
-    registerWorker: ['/api/register', ['id', 'fio', 'city', 'branch']],
+    registerWorker: ['/api/register', ['id', 'store']],
     sendVoice: ['/api/voice', ['id', 'audio']],
     sendText: ['/api/voice', ['id', 'text']],
     getStock: ['/api/stock', ['id']],
@@ -281,18 +299,23 @@
   let pickBranch = null;
 
   function renderWho() {
-    $('whoName').textContent = worker.fio;
-    $('whoPlace').textContent = worker.city + ' · Филиал ' + worker.branch;
+    const st = worker.store || 'Точка не выбрана';
+    const short = st.indexOf(' — ') > 0 ? st.split(' — ').slice(1).join(' — ') : st;
+    $('whoName').textContent = short;
+    $('whoPlace').textContent = worker.city || '';
   }
 
   function openRegister(editing) {
-    $('regTitle').textContent = editing ? 'Изменить данные' : 'Давайте познакомимся';
+    $('regTitle').textContent = editing ? 'Сменить точку' : 'Где вы работаете?';
     show($('regCancel'), !!editing);
-    $('fio').value = editing && worker ? worker.fio : '';
-    pickCity = editing && worker ? cities.findIndex(function (c) { return c.name === worker.city; }) : null;
-    pickBranch = (pickCity !== null && pickCity >= 0) ? cities[pickCity].branches.indexOf(worker.branch) : null;
-    if (pickCity < 0) pickCity = null;
-    if (pickBranch < 0) pickBranch = null;
+    pickCity = null;
+    pickBranch = null;
+    if (worker && worker.storeId) {
+      cities.forEach(function (c, i) {
+        const j = c.stores.findIndex(function (s) { return s.id === worker.storeId; });
+        if (j >= 0) { pickCity = i; pickBranch = j; }
+      });
+    }
     renderChoices();
     show($('regError'), false);
     show($('main'), false);
@@ -314,11 +337,11 @@
     const bWrap = $('branches');
     bWrap.innerHTML = '';
     if (pickCity !== null) {
-      cities[pickCity].branches.forEach(function (br, j) {
+      cities[pickCity].stores.forEach(function (st, j) {
         const b = document.createElement('button');
         b.className = 'chip';
         b.type = 'button';
-        b.textContent = 'Филиал ' + br;
+        b.textContent = st.name;
         b.setAttribute('aria-pressed', String(pickBranch === j));
         b.onclick = function () { pickBranch = j; renderChoices(); };
         bWrap.appendChild(b);
@@ -329,19 +352,18 @@
   }
 
   function validate() {
-    const words = $('fio').value.trim().split(/\s+/).filter(Boolean);
-    $('regBtn').disabled = !(words.length >= 2 && pickCity !== null && pickBranch !== null);
+    $('regBtn').disabled = !(pickCity !== null && pickBranch !== null);
   }
-  $('fio').addEventListener('input', validate);
 
   $('regBtn').onclick = function () {
     const btn = $('regBtn');
     btn.disabled = true;
     btn.textContent = 'Сохраняю…';
     show($('regError'), false);
-    call('registerWorker', ID, $('fio').value.trim(), pickCity, pickBranch)
+    call('registerWorker', ID, cities[pickCity].stores[pickBranch].id)
       .then(function (r) {
         worker = r.worker;
+        try { localStorage.setItem(REG_KEY, REG_VERSION); } catch (e) {}
         renderWho();
         show($('register'), false);
         show($('main'), true);
@@ -387,7 +409,7 @@
 
   function startRecording() {
     if (!navigator.mediaDevices || !window.MediaRecorder) {
-      showError('Этот браузер не умеет записывать звук. Откройте страницу в Chrome или Safari, либо напишите остатки текстом ниже.');
+      showError('Этот браузер не умеет записывать звук. Откройте страницу в Chrome или Safari, либо напишите списание текстом ниже.');
       return;
     }
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
@@ -436,7 +458,7 @@
     busy = false;
     setMic('idle');
     $('timer').textContent = '';
-    $('hint').textContent = 'Нажмите и назовите остатки';
+    $('hint').textContent = 'Нажмите и назовите списание';
   }
 
   // Любой формат записи (webm, mp4, ogg) → WAV 16 кГц моно → base64
@@ -501,7 +523,7 @@
     const box = $('result');
     let html = '';
     if (r.items && r.items.length) {
-      html += '<h2>✅ Записано в таблицу</h2>';
+      html += '<h2>✅ Списание записано</h2>';
       if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
       html += '<ul class="items">' + r.items.map(function (i) {
         return '<li><span>' + esc(i.name) + '</span><b>' + esc(i.quantity) + ' ' + esc(i.unit || '') + '</b></li>';
@@ -512,7 +534,7 @@
       if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
     }
     if (r.message) html += '<div class="note warn">' + esc(r.message) + '</div>';
-    html += '<button class="link" id="fixBtn" style="margin-top:12px">Исправить количество</button>';
+    html += '<button class="link" id="fixBtn" style="margin-top:12px">Исправить или добавить вручную</button>';
     box.innerHTML = html;
     show(box, true);
     $('fixBtn').onclick = function () { openStock(true); };
@@ -521,13 +543,19 @@
 
   function showError(msg) {
     const box = $('result');
-    if (/не найден/i.test(msg) && /регистрац/i.test(msg)) { openRegister(false); }
+    if (/не найден/i.test(msg) && /регистрац/i.test(msg)) { worker = null; openRegister(false); }
+    else if (/выберите свою точку/i.test(msg)) { openRegister(false); }
     box.innerHTML = '<h2>⚠️ Не получилось</h2><div class="note err">' + esc(msg) + '</div>';
     show(box, true);
   }
 
-  // ---------- Изменить остатки ----------
+  // ---------- Изменить списание ----------
+  // Без поиска показываются товары, где уже есть списание; поиск находит любой товар точки.
   let stockOpen = false;
+  let allItems = [];
+  let edits = {};        // row → новое значение
+  let sheetName = '';
+  const MAX_SHOWN = 40;
 
   function openStock(scroll) {
     stockOpen = true;
@@ -555,45 +583,76 @@
   function loadStock() {
     $('stockList').innerHTML = '<div class="center" style="padding:16px 0">Загрузка…</div>';
     stockNote('', '');
-    return call('getStock', ID).then(renderStock).catch(function (e) {
+    return call('getStock', ID).then(setStock).catch(function (e) {
       $('stockList').innerHTML = '';
       stockNote('err', e.message);
     });
   }
 
-  function renderStock(r) {
-    $('stockSub').textContent = r.sheet ? r.sheet + ' · исправьте количество вручную' : 'Исправьте количество вручную';
+  function setStock(r) {
+    allItems = r.items || [];
+    sheetName = r.sheet || '';
+    edits = {};
+    $('stockSub').textContent = sheetName ? sheetName + ' · исправьте или добавьте вручную' : 'Исправьте или добавьте вручную';
+    renderStock();
+  }
+
+  function norm(s) { return String(s).toLowerCase().replace(/ё/g, 'е'); }
+
+  $('stockSearch').addEventListener('input', renderStock);
+
+  function renderStock() {
+    const q = norm($('stockSearch').value.trim());
+    let rows;
+    if (q) {
+      const words = q.split(/\s+/);
+      rows = allItems.filter(function (it) {
+        const n = norm(it.name);
+        return words.every(function (w) { return n.indexOf(w) >= 0; });
+      });
+    } else {
+      rows = allItems.filter(function (it) { return it.quantity !== '' || edits[it.row] !== undefined; })
+        .sort(function (a, b) { return b.updated < a.updated ? -1 : (b.updated > a.updated ? 1 : 0); });
+    }
     const list = $('stockList');
     list.innerHTML = '';
-    (r.items || []).forEach(function (it) {
+    rows.slice(0, MAX_SHOWN).forEach(function (it) {
       const row = document.createElement('div');
       row.className = 'srow';
-      const meta = [it.updated, it.by].filter(Boolean).join(' · ');
-      row.innerHTML = '<div><div class="nm">' + esc(it.name) + '</div>' + (meta ? '<small>' + esc(meta) + '</small>' : '<small>ещё не заполнено</small>') + '</div>';
+      const meta = [it.unit, it.updated, it.by].filter(Boolean).join(' · ');
+      row.innerHTML = '<div><div class="nm">' + esc(it.name) + '</div><small>' + esc(meta) + '</small></div>';
       const inp = document.createElement('input');
       inp.type = 'text';
       inp.inputMode = 'decimal';
       inp.placeholder = '—';
-      inp.value = it.quantity;
-      inp.dataset.row = it.row;
-      inp.dataset.orig = it.quantity;
-      inp.setAttribute('aria-label', 'Количество: ' + it.name);
+      inp.value = edits[it.row] !== undefined ? edits[it.row] : it.quantity;
+      inp.classList.toggle('changed', edits[it.row] !== undefined);
+      inp.setAttribute('aria-label', 'Списание: ' + it.name);
       inp.addEventListener('input', function () {
         inp.value = inp.value.replace(/[^0-9.,]/g, '');
-        inp.classList.toggle('changed', inp.value.trim() !== inp.dataset.orig);
+        if (inp.value.trim() === it.quantity) delete edits[it.row];
+        else edits[it.row] = inp.value.trim();
+        inp.classList.toggle('changed', edits[it.row] !== undefined);
         updateSave();
       });
       row.appendChild(inp);
       list.appendChild(row);
     });
-    if (!(r.items || []).length) list.innerHTML = '<div class="stock-sub">На листе филиала нет позиций.</div>';
+    if (!rows.length) {
+      list.innerHTML = '<div class="stock-sub" style="padding:8px 0">' +
+        (q ? 'Ничего не найдено.' : 'Списания пока нет. Найдите товар через поиск, чтобы вписать вручную.') + '</div>';
+    } else if (rows.length > MAX_SHOWN) {
+      const more = document.createElement('div');
+      more.className = 'stock-sub';
+      more.style.padding = '8px 0';
+      more.textContent = 'Показаны первые ' + MAX_SHOWN + ' из ' + rows.length + ' — уточните поиск.';
+      list.appendChild(more);
+    }
     updateSave();
   }
 
   function changedRows() {
-    return Array.prototype.slice.call($('stockList').querySelectorAll('input'))
-      .filter(function (i) { return i.value.trim() !== '' && i.value.trim() !== i.dataset.orig; })
-      .map(function (i) { return { row: +i.dataset.row, quantity: i.value.trim() }; });
+    return Object.keys(edits).map(function (row) { return { row: +row, quantity: edits[row] }; });
   }
 
   function updateSave() {
@@ -610,8 +669,8 @@
     btn.textContent = 'Сохраняю…';
     call('saveStock', ID, items)
       .then(function (r) {
-        renderStock(r);
-        stockNote('ok', '✅ Сохранено: ' + r.saved + ' ' + (r.saved === 1 ? 'позиция' : (r.saved < 5 ? 'позиции' : 'позиций')));
+        setStock(r);
+        stockNote('ok', '✅ Сохранено: ' + r.saved + ' ' + (r.saved === 1 ? 'товар' : (r.saved < 5 ? 'товара' : 'товаров')));
       })
       .catch(function (e) { stockNote('err', e.message); updateSave(); });
   };
@@ -621,7 +680,9 @@
     cities = r.cities || [];
     worker = r.worker;
     show($('loading'), false);
-    if (worker) { renderWho(); show($('main'), true); }
+    let regOk = false;
+    try { regOk = localStorage.getItem(REG_KEY) === REG_VERSION; } catch (e) {}
+    if (worker && !worker.needsStore && regOk) { renderWho(); show($('main'), true); }
     else openRegister(false);
   }).catch(function (e) {
     $('loading').textContent = 'Не удалось загрузить: ' + e.message;
@@ -629,6 +690,59 @@
 })();
 </script>
 <script>
+  // ---------- Установка приложения ----------
+  (function () {
+    var card = document.getElementById('installCard');
+    var btn = document.getElementById('installBtn');
+    var steps = document.getElementById('installSteps');
+    var deferred = null;
+    var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+    if (standalone) return;
+
+    var ua = navigator.userAgent;
+    var manual;
+    if (/SamsungBrowser/i.test(ua)) manual = ['Нажмите ≡ (меню) внизу справа', 'Выберите «Добавить страницу на» → «Главный экран»', 'Нажмите «Добавить»'];
+    else if (/YaBrowser/i.test(ua)) manual = ['Нажмите ⋮ (меню)', 'Выберите «Добавить ярлык» / «На главный экран»', 'Или откройте эту страницу в Chrome — там установка в одно нажатие'];
+    else if (/iPhone|iPad|iPod/i.test(ua)) manual = ['Откройте страницу в Safari', 'Нажмите «Поделиться» (квадрат со стрелкой)', 'Выберите «На экран Домой» → «Добавить»'];
+    else if (/Android/i.test(ua)) manual = ['Нажмите ⋮ (меню) справа вверху', 'Выберите «Установить приложение» или «Добавить на главный экран»', 'Нажмите «Установить»'];
+    else manual = ['Нажмите значок установки в адресной строке (монитор со стрелкой)', 'Или ⋮ → «Трансляция, сохранение и отправка» → «Установить страницу как приложение»'];
+
+    function showManual() {
+      steps.innerHTML = manual.map(function (t) { return '<li>' + t + '</li>'; }).join('');
+      steps.classList.remove('hidden');
+      btn.textContent = 'Скрыть';
+    }
+
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferred = e;
+      btn.textContent = 'Установить';
+      steps.classList.add('hidden');
+      card.classList.remove('hidden');
+    });
+
+    btn.onclick = function () {
+      if (deferred) {
+        deferred.prompt();
+        deferred.userChoice.then(function (c) { if (c && c.outcome === 'accepted') card.classList.add('hidden'); });
+        deferred = null;
+        return;
+      }
+      if (steps.classList.contains('hidden')) showManual();
+      else { steps.classList.add('hidden'); btn.textContent = 'Как установить'; }
+    };
+
+    window.addEventListener('appinstalled', function () { card.classList.add('hidden'); });
+
+    // Если браузер не предложил установку сам — показываем инструкцию
+    setTimeout(function () {
+      if (!deferred) {
+        btn.textContent = 'Как установить';
+        card.classList.remove('hidden');
+      }
+    }, 2500);
+  })();
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
