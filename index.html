@@ -155,6 +155,8 @@
   .search { margin-bottom: 6px; }
   .stores { display: flex; flex-direction: column; gap: 8px; }
   .stores .chip { text-align: left; border-radius: 12px; }
+  .choice { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; }
+  .choice-q { font-size: 15px; margin-bottom: 10px; }
   .hidden { display: none !important; }
   .center { text-align: center; color: var(--muted); padding: 40px 0; }
 </style>
@@ -524,6 +526,7 @@
   function showResult(r) {
     const box = $('result');
     let html = '';
+    const hasChoices = r.choices && r.choices.length;
     if (r.items && r.items.length) {
       html += '<h2>✅ Списание записано</h2>';
       if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
@@ -532,16 +535,55 @@
       if (r.editUntil) html += '<div class="where">✏️ Количество можно исправить до ' + esc(fmtUntil(r.editUntil)) + '</div>';
       html += '<div id="resNote" class="note hidden"></div><button id="resSave" class="btn" disabled>Сохранить</button>';
     } else {
-      html += '<h2>Ничего не записано</h2>';
+      html += hasChoices ? '<h2>🤔 Уточните товар</h2>' : '<h2>Ничего не записано</h2>';
       if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
     }
+    if (hasChoices) html += '<div id="resChoices"></div>';
     if (r.message) html += '<div class="note warn">' + esc(r.message) + '</div>';
     html += '<button class="link" id="fixBtn" style="margin-top:12px">Исправить или добавить вручную</button>';
     box.innerHTML = html;
     show(box, true);
     $('fixBtn').onclick = function () { openStock(true); };
     if (r.items && r.items.length) renderResult(r.items);
+    if (hasChoices) renderChoices(r.choices);
     if (stockOpen) loadStock();
+  }
+
+  // Продавец назвал товар неточно («эклер»), а подходят несколько позиций — просим выбрать нужную
+  function renderChoices(choices) {
+    const box = $('resChoices');
+    box.innerHTML = '';
+    choices.forEach(function (ch) {
+      const card = document.createElement('div');
+      card.className = 'choice';
+      card.innerHTML = '<div class="choice-q">Вы сказали «' + esc(ch.said) + '» — ' + esc(ch.quantity) + '. Какой именно товар?</div>';
+      const opts = document.createElement('div');
+      opts.className = 'stores';
+      ch.options.forEach(function (o) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip';
+        b.textContent = o.name;
+        b.onclick = function () {
+          opts.querySelectorAll('button').forEach(function (x) { x.disabled = true; });
+          b.setAttribute('aria-pressed', 'true');
+          call('saveStock', ID, [{ row: o.row, quantity: ch.quantity }]).then(function (r) {
+            card.innerHTML = '<div class="note ok">✅ Записано: ' + esc(o.name) + ' — ' + esc(ch.quantity) + ' ' + esc(o.unit || '') + '</div>';
+            if (stockOpen) setStock(r);
+          }).catch(function (e) {
+            opts.querySelectorAll('button').forEach(function (x) { x.disabled = false; });
+            b.removeAttribute('aria-pressed');
+            const n = document.createElement('div');
+            n.className = 'note err';
+            n.textContent = e.message;
+            card.appendChild(n);
+          });
+        };
+        opts.appendChild(b);
+      });
+      card.appendChild(opts);
+      box.appendChild(card);
+    });
   }
 
   // «2026-11-12 07:00» → «07:00 12 ноября»
