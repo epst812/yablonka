@@ -157,8 +157,6 @@
   .stores .chip { text-align: left; border-radius: 12px; }
   .choice { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; }
   .choice-q { font-size: 15px; margin-bottom: 10px; }
-  .due { border: 1.5px solid var(--warn); }
-  .due .srow button { flex: none; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
   .hidden { display: none !important; }
   .center { text-align: center; color: var(--muted); padding: 40px 0; }
 </style>
@@ -216,15 +214,6 @@
 
     <div id="result" class="card result hidden"></div>
 
-    <div id="dueCard" class="card due hidden">
-      <b>⏰ Сегодня заканчивается срок</b>
-      <div class="stock-sub">Укажите списание по этим товарам или отметьте «Нет»</div>
-      <div id="dueList" style="margin-top:8px"></div>
-      <div id="dueNote" class="note hidden"></div>
-      <button id="dueSave" class="btn" disabled>Сохранить</button>
-      <button id="dueNone" class="link" style="display:block;margin:12px auto 0">По остальным — списания нет</button>
-    </div>
-
     <div id="stockCard" class="card">
       <div class="stock-head">
         <div><b>Изменить списание</b><div id="stockSub" class="stock-sub">Исправьте или добавьте вручную</div></div>
@@ -280,8 +269,7 @@
     sendVoice: ['/api/voice', ['id', 'audio']],
     sendText: ['/api/voice', ['id', 'text']],
     getStock: ['/api/stock', ['id']],
-    saveStock: ['/api/stock/save', ['id', 'items']],
-    getDue: ['/api/due', ['id']]
+    saveStock: ['/api/stock/save', ['id', 'items']]
   };
   // Адрес скрипта Google Apps Script (развертывание «Веб-приложение»)
   const API_URL = 'https://script.google.com/macros/s/AKfycbxwUZqjBfAVChIKr7H89jjGEU1FaX4ups-Doyg_SELp7uVSmC1kIxznN6jCoFT3A_-LLQ/exec';
@@ -383,7 +371,6 @@
         renderWho();
         show($('register'), false);
         show($('main'), true);
-        loadDue();
       })
       .catch(function (e) {
         $('regError').textContent = e.message;
@@ -553,96 +540,13 @@
     }
     if (hasChoices) html += '<div id="resChoices"></div>';
     if (r.message) html += '<div class="note warn">' + esc(r.message) + '</div>';
-    if (r.due && r.due.length) {
-      html += '<div class="note warn">⏰ Вы не назвали товары, у которых сегодня заканчивается срок: ' +
-        esc(r.due.map(function (d) { return d.name; }).join(', ')) + '. Укажите по ним списание ниже.</div>';
-    }
     html += '<button class="link" id="fixBtn" style="margin-top:12px">Исправить или добавить вручную</button>';
     box.innerHTML = html;
     show(box, true);
     $('fixBtn').onclick = function () { openStock(true); };
     if (r.items && r.items.length) renderResult(r.items);
     if (hasChoices) renderChoices(r.choices);
-    if (r.due) renderDue(r.due);
     if (stockOpen) loadStock();
-  }
-
-  // ---------- Подсказки: у каких товаров сегодня заканчивается срок
-  let dueItems = [];
-  const dueVals = {};
-
-  function renderDue(due) {
-    dueItems = due || [];
-    Object.keys(dueVals).forEach(function (k) { if (!dueItems.some(function (d) { return String(d.row) === k; })) delete dueVals[k]; });
-    const list = $('dueList');
-    list.innerHTML = '';
-    dueItems.forEach(function (it) {
-      const row = document.createElement('div');
-      row.className = 'srow';
-      row.innerHTML = '<div><div class="nm">' + esc(it.name) + '</div><small>' + esc([it.unit, it.shelf].filter(Boolean).join(' · ')) + '</small></div>';
-      const right = document.createElement('div');
-      right.style.cssText = 'display:flex;gap:8px;align-items:center';
-      const inp = document.createElement('input');
-      inp.type = 'text';
-      inp.inputMode = 'decimal';
-      inp.placeholder = '—';
-      inp.value = dueVals[it.row] || '';
-      inp.setAttribute('aria-label', 'Списание: ' + it.name);
-      inp.addEventListener('input', function () {
-        inp.value = inp.value.replace(/[^0-9.,]/g, '');
-        if (inp.value.trim() === '') delete dueVals[it.row]; else dueVals[it.row] = inp.value.trim();
-        updDue();
-      });
-      const none = document.createElement('button');
-      none.type = 'button';
-      none.textContent = 'Нет';
-      none.onclick = function () { inp.value = '0'; dueVals[it.row] = '0'; updDue(); };
-      right.appendChild(inp);
-      right.appendChild(none);
-      row.appendChild(right);
-      list.appendChild(row);
-    });
-    show($('dueCard'), dueItems.length > 0);
-    updDue();
-  }
-
-  function updDue() {
-    const n = Object.keys(dueVals).length;
-    $('dueSave').disabled = !n;
-    $('dueSave').textContent = n ? 'Сохранить (' + n + ')' : 'Сохранить';
-  }
-
-  function saveDue(changes) {
-    if (!changes.length) return;
-    $('dueSave').disabled = true;
-    $('dueSave').textContent = 'Сохраняю…';
-    call('saveStock', ID, changes).then(function (r) {
-      changes.forEach(function (c) { delete dueVals[c.row]; });
-      renderDue(r.due || []);
-      if (stockOpen) setStock(r);
-      if (!(r.due || []).length) {
-        const box = $('result');
-        if (!box.classList.contains('hidden')) {
-          box.querySelectorAll('.note.warn').forEach(function (n) { if (/⏰/.test(n.textContent)) n.remove(); });
-        }
-      }
-    }).catch(function (e) {
-      const n = $('dueNote');
-      n.className = 'note err';
-      n.textContent = e.message;
-      updDue();
-    });
-  }
-
-  $('dueSave').onclick = function () {
-    saveDue(Object.keys(dueVals).map(function (row) { return { row: +row, quantity: dueVals[row] }; }));
-  };
-  $('dueNone').onclick = function () {
-    saveDue(dueItems.map(function (it) { return { row: it.row, quantity: dueVals[it.row] !== undefined ? dueVals[it.row] : '0' }; }));
-  };
-
-  function loadDue() {
-    call('getDue', ID).then(function (r) { renderDue(r.due || []); }).catch(function () {});
   }
 
   // Продавец назвал товар неточно («эклер»), а подходят несколько позиций — просим выбрать нужную
@@ -666,7 +570,6 @@
           call('saveStock', ID, [{ row: o.row, quantity: ch.quantity }]).then(function (r) {
             card.innerHTML = '<div class="note ok">✅ Записано: ' + esc(o.name) + ' — ' + esc(ch.quantity) + ' ' + esc(o.unit || '') + '</div>';
             if (stockOpen) setStock(r);
-            if (r.due) renderDue(r.due);
           }).catch(function (e) {
             opts.querySelectorAll('button').forEach(function (x) { x.disabled = false; });
             b.removeAttribute('aria-pressed');
@@ -737,7 +640,6 @@
         note.className = 'note ok';
         note.textContent = '✅ Исправлено';
         if (stockOpen) setStock(r);
-        if (r.due) renderDue(r.due);
       }).catch(function (e) {
         const note = $('resNote');
         note.className = 'note err';
@@ -877,7 +779,6 @@
     call('saveStock', ID, items)
       .then(function (r) {
         setStock(r);
-        if (r.due) renderDue(r.due);
         stockNote('ok', '✅ Сохранено: ' + r.saved + ' ' + (r.saved === 1 ? 'товар' : (r.saved < 5 ? 'товара' : 'товаров')));
       })
       .catch(function (e) { stockNote('err', e.message); updateSave(); });
@@ -890,7 +791,7 @@
     show($('loading'), false);
     let regOk = false;
     try { regOk = localStorage.getItem(REG_KEY) === REG_VERSION; } catch (e) {}
-    if (worker && !worker.needsStore && regOk) { renderWho(); show($('main'), true); loadDue(); }
+    if (worker && !worker.needsStore && regOk) { renderWho(); show($('main'), true); }
     else openRegister(false);
   }).catch(function (e) {
     $('loading').textContent = 'Не удалось загрузить: ' + e.message;
