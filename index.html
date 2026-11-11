@@ -535,53 +535,119 @@
       if (r.editUntil) html += '<div class="where">✏️ Количество можно исправить до ' + esc(fmtUntil(r.editUntil)) + '</div>';
       html += '<div id="resNote" class="note hidden"></div><button id="resSave" class="btn" disabled>Сохранить</button>';
     } else {
-      html += hasChoices ? '<h2>🤔 Уточните товар</h2>' : '<h2>Ничего не записано</h2>';
+      html += hasChoices ? '<h2>🤔 Нужно уточнить</h2>' : '<h2>Ничего не записано</h2>';
       if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
     }
-    if (hasChoices) html += '<div id="resChoices"></div>';
+    if (hasChoices) html += (r.items && r.items.length ? '<h2 style="margin-top:18px">🤔 Нужно уточнить</h2>' : '') + '<div id="resChoices"></div>';
     if (r.message) html += '<div class="note warn">' + esc(r.message) + '</div>';
     html += '<button class="link" id="fixBtn" style="margin-top:12px">Исправить или добавить вручную</button>';
     box.innerHTML = html;
     show(box, true);
     $('fixBtn').onclick = function () { openStock(true); };
     if (r.items && r.items.length) renderResult(r.items);
-    if (hasChoices) renderChoices(r.choices);
+    if (hasChoices) renderQuestions(r.choices);
     if (stockOpen) loadStock();
   }
 
-  // Продавец назвал товар неточно («эклер»), а подходят несколько позиций — просим выбрать нужную
-  function renderChoices(choices) {
+  // Всё, что не удалось понять однозначно, приходит вопросом: не та единица, несколько похожих товаров,
+  // строгое название названо неточно или товар не найден. Продавец выбирает товар и количество — только тогда записываем.
+  function renderQuestions(questions) {
     const box = $('resChoices');
     box.innerHTML = '';
-    choices.forEach(function (ch) {
+    questions.forEach(function (ch) {
       const card = document.createElement('div');
       card.className = 'choice';
-      card.innerHTML = '<div class="choice-q">Вы сказали «' + esc(ch.said) + '» — ' + esc(ch.quantity) + '. Какой именно товар?</div>';
-      const opts = document.createElement('div');
-      opts.className = 'stores';
-      ch.options.forEach(function (o) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'chip';
-        b.textContent = o.name;
-        b.onclick = function () {
-          opts.querySelectorAll('button').forEach(function (x) { x.disabled = true; });
-          b.setAttribute('aria-pressed', 'true');
-          call('saveStock', ID, [{ row: o.row, quantity: ch.quantity }]).then(function (r) {
-            card.innerHTML = '<div class="note ok">✅ Записано: ' + esc(o.name) + ' — ' + esc(ch.quantity) + ' ' + esc(o.unit || '') + '</div>';
-            if (stockOpen) setStock(r);
-          }).catch(function (e) {
-            opts.querySelectorAll('button').forEach(function (x) { x.disabled = false; });
-            b.removeAttribute('aria-pressed');
-            const n = document.createElement('div');
-            n.className = 'note err';
-            n.textContent = e.message;
-            card.appendChild(n);
-          });
-        };
-        opts.appendChild(b);
-      });
-      card.appendChild(opts);
+      const opts = ch.options || [];
+      const said = '«' + esc(ch.said) + '»';
+      const qty = esc(ch.quantity) + (ch.saidUnit ? ' ' + esc(ch.saidUnit) : '');
+      let q;
+      if (ch.reason === 'unit' && opts.length) {
+        q = 'Вы сказали ' + said + ' — ' + qty + ', но «' + esc(opts[0].name) + '» считается в ' + esc(opts[0].unit || 'шт') + '. Сколько записать?';
+      } else if (ch.reason === 'strict') {
+        q = said + ' — ' + qty + '. Этот товар легко спутать с похожими. Что вы имели в виду?';
+      } else if (ch.reason === 'unknown' || !opts.length) {
+        q = 'Не понял, что такое ' + said + ' (' + qty + ').' + (opts.length ? ' Может быть, один из этих товаров?' : ' Скажите ещё раз точнее или добавьте вручную ниже.');
+      } else {
+        q = 'Вы сказали ' + said + ' — ' + qty + '. Какой именно товар?';
+      }
+      card.innerHTML = '<div class="choice-q">' + q + '</div>';
+      let sel = opts.length === 1 ? opts[0] : null;
+
+      const list = document.createElement('div');
+      list.className = 'stores';
+      if (opts.length > 1) {
+        opts.forEach(function (o) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'chip';
+          b.textContent = o.name;
+          b.onclick = function () {
+            sel = o;
+            list.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+            unitEl.textContent = o.unit || '';
+            upd();
+          };
+          list.appendChild(b);
+        });
+        card.appendChild(list);
+      }
+
+      const form = document.createElement('div');
+      form.className = 'srow';
+      form.innerHTML = '<div><div class="nm">Количество</div><small>можно изменить</small></div>';
+      const right = document.createElement('div');
+      right.style.cssText = 'display:flex;gap:8px;align-items:center';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.inputMode = 'decimal';
+      inp.value = String(ch.quantity);
+      inp.setAttribute('aria-label', 'Количество');
+      const unitEl = document.createElement('span');
+      unitEl.textContent = sel ? (sel.unit || '') : '';
+      right.appendChild(inp);
+      right.appendChild(unitEl);
+      form.appendChild(right);
+
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'btn';
+      const skip = document.createElement('button');
+      skip.type = 'button';
+      skip.className = 'link';
+      skip.style.cssText = 'display:block;margin:10px auto 0';
+      skip.textContent = opts.length ? 'Не записывать' : 'Понятно';
+      skip.onclick = function () { card.innerHTML = '<div class="note">Пропущено: ' + said + '</div>'; };
+
+      function val() { return inp.value.trim().replace(',', '.'); }
+      function upd() {
+        const v = val();
+        save.disabled = !sel || v === '' || !isFinite(Number(v));
+        save.textContent = sel ? 'Записать: ' + (v || '…') + ' ' + (sel.unit || '') : 'Выберите товар';
+      }
+      inp.addEventListener('input', function () { inp.value = inp.value.replace(/[^0-9.,]/g, ''); upd(); });
+      save.onclick = function () {
+        if (!sel) return;
+        const v = val();
+        save.disabled = true;
+        save.textContent = 'Сохраняю…';
+        call('saveStock', ID, [{ row: sel.row, quantity: v }]).then(function (r) {
+          card.innerHTML = '<div class="note ok">✅ Записано: ' + esc(sel.name) + ' — ' + esc(v) + ' ' + esc(sel.unit || '') + '</div>';
+          if (stockOpen) setStock(r);
+        }).catch(function (e) {
+          const n = document.createElement('div');
+          n.className = 'note err';
+          n.textContent = e.message;
+          card.appendChild(n);
+          upd();
+        });
+      };
+
+      if (opts.length) {
+        card.appendChild(form);
+        card.appendChild(save);
+        upd();
+      }
+      card.appendChild(skip);
       box.appendChild(card);
     });
   }
