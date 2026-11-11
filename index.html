@@ -527,10 +527,10 @@
     if (r.items && r.items.length) {
       html += '<h2>✅ Списание записано</h2>';
       if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
-      html += '<ul class="items">' + r.items.map(function (i) {
-        return '<li><span>' + esc(i.name) + '</span><b>' + esc(i.quantity) + ' ' + esc(i.unit || '') + '</b></li>';
-      }).join('') + '</ul>';
+      html += '<div id="resList"></div>';
       if (r.sheet) html += '<div class="where">📍 ' + esc(r.sheet) + ' · ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) + '</div>';
+      if (r.editUntil) html += '<div class="where">✏️ Количество можно исправить до ' + esc(fmtUntil(r.editUntil)) + '</div>';
+      html += '<div id="resNote" class="note hidden"></div><button id="resSave" class="btn" disabled>Сохранить</button>';
     } else {
       html += '<h2>Ничего не записано</h2>';
       if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
@@ -540,7 +540,72 @@
     box.innerHTML = html;
     show(box, true);
     $('fixBtn').onclick = function () { openStock(true); };
+    if (r.items && r.items.length) renderResult(r.items);
     if (stockOpen) loadStock();
+  }
+
+  // «2026-11-12 07:00» → «07:00 12 ноября»
+  function fmtUntil(s) {
+    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})$/);
+    if (!m) return s;
+    const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+    return m[4] + ' ' + (+m[3]) + ' ' + months[+m[2] - 1];
+  }
+
+  // Количество в карточке «Списание записано» можно поправить сразу
+  function renderResult(items) {
+    const list = $('resList');
+    const resEdits = {};
+    list.innerHTML = '';
+    items.forEach(function (it) {
+      const row = document.createElement('div');
+      row.className = 'srow';
+      row.innerHTML = '<div><div class="nm">' + esc(it.name) + '</div><small>' + esc(it.unit || '') + '</small></div>';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.inputMode = 'decimal';
+      inp.value = String(it.quantity);
+      inp.setAttribute('aria-label', 'Списание: ' + it.name);
+      inp.addEventListener('input', function () {
+        inp.value = inp.value.replace(/[^0-9.,]/g, '');
+        if (inp.value.trim() === String(it.quantity)) delete resEdits[it.row];
+        else resEdits[it.row] = inp.value.trim();
+        inp.classList.toggle('changed', resEdits[it.row] !== undefined);
+        upd();
+      });
+      row.appendChild(inp);
+      list.appendChild(row);
+    });
+    function upd() {
+      const n = Object.keys(resEdits).length;
+      $('resSave').disabled = !n;
+      $('resSave').textContent = n ? 'Сохранить (' + n + ')' : 'Сохранить';
+    }
+    $('resSave').onclick = function () {
+      const changes = Object.keys(resEdits).map(function (row) { return { row: +row, quantity: resEdits[row] }; });
+      if (!changes.length) return;
+      $('resSave').disabled = true;
+      $('resSave').textContent = 'Сохраняю…';
+      call('saveStock', ID, changes).then(function (r) {
+        const byRow = {};
+        (r.items || []).forEach(function (i) { byRow[i.row] = i; });
+        const fresh = items.map(function (it) {
+          const n = byRow[it.row];
+          return { row: it.row, name: it.name, unit: it.unit, quantity: n ? n.quantity : it.quantity };
+        }).filter(function (it) { return it.quantity !== ''; });
+        renderResult(fresh);
+        const note = $('resNote');
+        note.className = 'note ok';
+        note.textContent = '✅ Исправлено';
+        if (stockOpen) setStock(r);
+      }).catch(function (e) {
+        const note = $('resNote');
+        note.className = 'note err';
+        note.textContent = e.message;
+        upd();
+      });
+    };
+    upd();
   }
 
   function showError(msg) {
@@ -595,7 +660,7 @@
     allItems = r.items || [];
     sheetName = r.sheet || '';
     edits = {};
-    $('stockSub').textContent = sheetName ? sheetName + ' · исправьте или добавьте вручную' : 'Исправьте или добавьте вручную';
+    $('stockSub').textContent = (sheetName ? sheetName + ' · ' : '') + (r.editUntil ? 'списание этой смены, можно менять до ' + fmtUntil(r.editUntil) : 'исправьте или добавьте вручную');
     renderStock();
   }
 
@@ -642,7 +707,7 @@
     });
     if (!rows.length) {
       list.innerHTML = '<div class="stock-sub" style="padding:8px 0">' +
-        (q ? 'Ничего не найдено.' : 'Списания пока нет. Найдите товар через поиск, чтобы вписать вручную.') + '</div>';
+        (q ? 'Ничего не найдено.' : 'В эту смену списания пока нет. Найдите товар через поиск, чтобы вписать вручную.') + '</div>';
     } else if (rows.length > MAX_SHOWN) {
       const more = document.createElement('div');
       more.className = 'stock-sub';
