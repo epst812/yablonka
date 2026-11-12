@@ -241,7 +241,7 @@
 
 <script>
 (function () {
-  const MAX_SECONDS = 60;
+  const MAX_SECONDS = 300;  // до 5 минут
   const $ = (id) => document.getElementById(id);
   const show = (el, on) => el.classList.toggle('hidden', !on);
 
@@ -429,7 +429,8 @@
       $('hint').textContent = 'Говорите… нажмите ещё раз, чтобы отправить';
       tick = setInterval(function () {
         const sec = (Date.now() - startedAt) / 1000;
-        $('timer').textContent = fmt(sec);
+        $('timer').textContent = fmt(sec) + ' / ' + fmt(MAX_SECONDS);
+        if (sec >= MAX_SECONDS - 30) $('hint').textContent = 'Осталось ' + Math.max(0, Math.ceil(MAX_SECONDS - sec)) + ' сек — запись остановится сама';
         if (sec >= MAX_SECONDS && recorder.state === 'recording') recorder.stop();
       }, 250);
     }).catch(function () {
@@ -487,7 +488,8 @@
     $('hint').textContent = 'Нажмите и назовите списание';
   }
 
-  // Любой формат записи (webm, mp4, ogg) → WAV 16 кГц моно → base64
+  // Любой формат записи (webm, mp4, ogg) → WAV моно → base64.
+  // Короткая запись — 16 кГц, длинная (больше минуты) — 8 кГц: файл вдвое легче, речь распознаётся так же
   function toWavBase64(blob) {
     return blob.arrayBuffer().then(function (buf) {
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -495,7 +497,7 @@
       return new Promise(function (res, rej) { ctx.decodeAudioData(buf, res, rej); })
         .then(function (decoded) {
           if (ctx.close) ctx.close();
-          const rate = 16000;
+          const rate = decoded.duration > 60 ? 8000 : 16000;
           const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
           const off = new OAC(1, Math.max(1, Math.ceil(decoded.duration * rate)), rate);
           const src = off.createBufferSource();
