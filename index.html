@@ -452,8 +452,30 @@
     setMic('busy');
     $('hint').textContent = 'Распознаю и записываю в таблицу…';
     toWavBase64(blob)
-      .then(function (b64) { return call('sendVoice', ID, b64); })
+      .then(function (b64) { lastSend = { fn: 'sendVoice', payload: b64 }; return sendWithRetry('sendVoice', b64); })
       .then(showResult)
+      .catch(function (e) { showError(e.message); })
+      .then(done);
+  }
+
+  // ---------- Если Gemini перегружен ----------
+  // Запись не теряем: один автоматический повтор через 5 секунд, дальше — кнопка «Отправить ещё раз».
+  let lastSend = null;
+  function transient(m) { return /GEMINI_BUSY|503|429|500|перегруж|high demand|unavailable|failed to fetch|networkerror|timeout|нет связи/i.test(String(m)); }
+  function sendWithRetry(fn, payload) {
+    return call(fn, ID, payload).catch(function (e) {
+      if (!transient(e.message)) throw e;
+      $('hint').textContent = 'Сервис распознавания перегружен — пробую ещё раз…';
+      return new Promise(function (r) { setTimeout(r, 5000); }).then(function () { return call(fn, ID, payload); });
+    });
+  }
+  function resend() {
+    if (!lastSend || busy) return;
+    busy = true;
+    setMic('busy');
+    $('hint').textContent = 'Отправляю ещё раз…';
+    sendWithRetry(lastSend.fn, lastSend.payload)
+      .then(function (r) { if (lastSend.fn === 'sendText') $('textInput').value = ''; showResult(r); })
       .catch(function (e) { showError(e.message); })
       .then(done);
   }
@@ -514,7 +536,8 @@
     busy = true;
     setMic('busy');
     $('hint').textContent = 'Записываю в таблицу…';
-    call('sendText', ID, text)
+    lastSend = { fn: 'sendText', payload: text };
+    sendWithRetry('sendText', text)
       .then(function (r) { $('textInput').value = ''; showResult(r); })
       .catch(function (e) { showError(e.message); })
       .then(done);
@@ -523,30 +546,43 @@
   // ---------- Результат ----------
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
+  // Одна карточка результата: список записанного (можно поправить) + уточняющие вопросы.
+  // Ответ на вопрос сразу переносит товар в общий список, а сам вопрос исчезает.
+  let curItems = [];
   function showResult(r) {
     const box = $('result');
-    let html = '';
-    const hasChoices = r.choices && r.choices.length;
-    if (r.items && r.items.length) {
-      html += '<h2>✅ Списание записано</h2>';
-      if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
-      html += '<div id="resList"></div>';
-      if (r.sheet) html += '<div class="where">📍 ' + esc(r.sheet) + ' · ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) + '</div>';
-      if (r.editUntil) html += '<div class="where">✏️ Количество можно исправить до ' + esc(fmtUntil(r.editUntil)) + '</div>';
-      html += '<div id="resNote" class="note hidden"></div><button id="resSave" class="btn" disabled>Сохранить</button>';
-    } else {
-      html += hasChoices ? '<h2>🤔 Нужно уточнить</h2>' : '<h2>Ничего не записано</h2>';
-      if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
-    }
-    if (hasChoices) html += (r.items && r.items.length ? '<h2 style="margin-top:18px">🤔 Нужно уточнить</h2>' : '') + '<div id="resChoices"></div>';
+    const hasItems = !!(r.items && r.items.length);
+    const hasChoices = !!(r.choices && r.choices.length);
+    let html = '<h2 id="resTitle">' + (hasItems ? '✅ Списание записано' : hasChoices ? '🤔 Нужно уточнить' : 'Ничего не записано') + '</h2>';
+    if (r.text) html += '<p class="heard">«' + esc(r.text) + '»</p>';
+    html += '<div id="resBlock"' + (hasItems ? '' : ' class="hidden"') + '><div id="resList"></div>';
+    if (r.sheet) html += '<div class="where">📍 ' + esc(r.sheet) + ' · ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) + '</div>';
+    if (r.editUntil) html += '<div class="where">✏️ Количество можно исправить до ' + esc(fmtUntil(r.editUntil)) + '</div>';
+    html += '<div id="resNote" class="note hidden"></div><button id="resSave" class="btn" disabled>Сохранить</button></div>';
+    if (hasChoices) html += '<div id="resQ"><h2 id="resQTitle" style="margin-top:18px"' + (hasItems ? '' : ' class="hidden"') + '>🤔 Нужно уточнить</h2><div id="resChoices"></div></div>';
     if (r.message) html += '<div class="note warn">' + esc(r.message) + '</div>';
     html += '<button class="link" id="fixBtn" style="margin-top:12px">Исправить или добавить вручную</button>';
     box.innerHTML = html;
     show(box, true);
     $('fixBtn').onclick = function () { openStock(true); };
-    if (r.items && r.items.length) renderResult(r.items);
+    curItems = hasItems ? r.items.slice() : [];
+    if (hasItems) renderResult(curItems);
     if (hasChoices) renderQuestions(r.choices);
     if (stockOpen) loadStock();
+  }
+
+  // Ответ на вопрос записан: товар — в общий список, вопрос убираем
+  function questionDone(card, item) {
+    card.remove();
+    if (item) {
+      curItems = curItems.filter(function (it) { return it.row !== item.row; }).concat([item]);
+      show($('resBlock'), true);
+      $('resTitle').textContent = '✅ Списание записано';
+      renderResult(curItems);
+    }
+    const left = document.querySelectorAll('#resChoices .choice').length;
+    if (!left) { const q = $('resQ'); if (q) q.remove(); }
+    else show($('resQTitle'), curItems.length > 0);
   }
 
   // Всё, что не удалось понять однозначно, приходит вопросом: не та единица, несколько похожих товаров,
@@ -616,7 +652,7 @@
       skip.className = 'link';
       skip.style.cssText = 'display:block;margin:10px auto 0';
       skip.textContent = opts.length ? 'Не записывать' : 'Понятно';
-      skip.onclick = function () { card.innerHTML = '<div class="note">Пропущено: ' + said + '</div>'; };
+      skip.onclick = function () { questionDone(card, null); };
 
       function val() { return inp.value.trim().replace(',', '.'); }
       function upd() {
@@ -631,7 +667,7 @@
         save.disabled = true;
         save.textContent = 'Сохраняю…';
         call('saveStock', ID, [{ row: sel.row, quantity: v }]).then(function (r) {
-          card.innerHTML = '<div class="note ok">✅ Записано: ' + esc(sel.name) + ' — ' + esc(v) + ' ' + esc(sel.unit || '') + '</div>';
+          questionDone(card, { row: sel.row, name: sel.name, unit: sel.unit, quantity: Number(v) });
           if (stockOpen) setStock(r);
         }).catch(function (e) {
           const n = document.createElement('div');
@@ -662,6 +698,7 @@
 
   // Количество в карточке «Списание записано» можно поправить сразу
   function renderResult(items) {
+    curItems = items;
     const list = $('resList');
     const resEdits = {};
     list.innerHTML = '';
@@ -720,6 +757,16 @@
     const box = $('result');
     if (/не найден/i.test(msg) && /регистрац/i.test(msg)) { worker = null; openRegister(false); }
     else if (/выберите свою точку/i.test(msg)) { openRegister(false); }
+    if (transient(msg) && lastSend) {
+      box.innerHTML = '<h2>⏳ Сервис распознавания перегружен</h2>' +
+        '<p>Google сейчас не успевает обработать запись. Она сохранена — нажмите «Отправить ещё раз» через минуту, говорить заново не нужно. ' +
+        'Или внесите списание вручную ниже.</p>' +
+        '<button id="resendBtn" class="btn">Отправить ещё раз</button>' +
+        '<div class="where" style="margin-top:10px">' + esc(String(msg).replace(/^GEMINI_BUSY:\s*/, '')) + '</div>';
+      show(box, true);
+      $('resendBtn').onclick = resend;
+      return;
+    }
     box.innerHTML = '<h2>⚠️ Не получилось</h2><div class="note err">' + esc(msg) + '</div>';
     show(box, true);
   }
