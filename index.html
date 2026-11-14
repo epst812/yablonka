@@ -73,6 +73,7 @@
     width: 100%; font: inherit; padding: 13px 14px; border-radius: 12px;
     border: 1px solid var(--line); background: var(--bg); color: var(--ink); outline: none;
   }
+  input.code { font-size: 28px; letter-spacing: 0.35em; text-align: center; font-variant-numeric: tabular-nums; }
   input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
@@ -184,16 +185,12 @@
 
   <!-- Регистрация -->
   <section id="register" class="card hidden">
-    <h1 id="regTitle">Где вы работаете?</h1>
-    <p class="lead">Выберите город и точку. Это нужно один раз — потом приложение вас запомнит.</p>
-    <label>Город</label>
-    <div id="cities" class="chips"></div>
-    <div id="branchBlock" class="hidden">
-      <label>Точка</label>
-      <div id="branches" class="stores"></div>
-    </div>
+    <h1 id="regTitle">Код точки</h1>
+    <p class="lead">Введите 6-значный код вашей точки — его даёт управляющий. Это нужно один раз — потом приложение вас запомнит.</p>
+    <label for="codeInput">Код точки</label>
+    <input id="codeInput" class="code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" placeholder="••••••">
     <div id="regError" class="note err hidden"></div>
-    <button id="regBtn" class="btn" disabled>Готово</button>
+    <button id="regBtn" class="btn" disabled>Войти</button>
     <button id="regCancel" class="link hidden" style="display:block;margin:14px auto 0">Отмена</button>
   </section>
 
@@ -260,12 +257,12 @@
   const ID = deviceId();
   // Версия регистрации: при смене все проходят выбор точки заново
   const REG_KEY = 'yablonka_reg_version';
-  const REG_VERSION = '2';
+  const REG_VERSION = '3';
 
   // ---------- Вызовы сервера ----------
   const ROUTES = {
     getMe: ['/api/me', ['id']],
-    registerWorker: ['/api/register', ['id', 'store']],
+    registerWorker: ['/api/register', ['id', 'code']],
     sendVoice: ['/api/voice', ['id', 'audio']],
     sendText: ['/api/voice', ['id', 'text']],
     getStock: ['/api/stock', ['id']],
@@ -297,10 +294,7 @@
   }
 
   // ---------- Состояние ----------
-  let cities = [];
   let worker = null;
-  let pickCity = null;
-  let pickBranch = null;
 
   function renderWho() {
     const st = worker.store || 'Точка не выбрана';
@@ -310,61 +304,38 @@
   }
 
   function openRegister(editing) {
-    $('regTitle').textContent = editing ? 'Сменить точку' : 'Где вы работаете?';
+    $('regTitle').textContent = editing ? 'Сменить точку' : 'Код точки';
     show($('regCancel'), !!editing);
-    pickCity = null;
-    pickBranch = null;
-    if (worker && worker.storeId) {
-      cities.forEach(function (c, i) {
-        const j = c.stores.findIndex(function (s) { return s.id === worker.storeId; });
-        if (j >= 0) { pickCity = i; pickBranch = j; }
-      });
-    }
-    renderChoices();
+    $('codeInput').value = '';
+    validate();
     show($('regError'), false);
     show($('main'), false);
     show($('register'), true);
+    setTimeout(function () { $('codeInput').focus(); }, 50);
   }
 
-  function renderChoices() {
-    const cWrap = $('cities');
-    cWrap.innerHTML = '';
-    cities.forEach(function (c, i) {
-      const b = document.createElement('button');
-      b.className = 'chip';
-      b.type = 'button';
-      b.textContent = c.name;
-      b.setAttribute('aria-pressed', String(pickCity === i));
-      b.onclick = function () { pickCity = i; pickBranch = null; renderChoices(); };
-      cWrap.appendChild(b);
-    });
-    const bWrap = $('branches');
-    bWrap.innerHTML = '';
-    if (pickCity !== null) {
-      cities[pickCity].stores.forEach(function (st, j) {
-        const b = document.createElement('button');
-        b.className = 'chip';
-        b.type = 'button';
-        b.textContent = st.name;
-        b.setAttribute('aria-pressed', String(pickBranch === j));
-        b.onclick = function () { pickBranch = j; renderChoices(); };
-        bWrap.appendChild(b);
-      });
-    }
-    show($('branchBlock'), pickCity !== null);
-    validate();
-  }
+  function codeVal() { return $('codeInput').value.replace(/\D/g, ''); }
 
   function validate() {
-    $('regBtn').disabled = !(pickCity !== null && pickBranch !== null);
+    $('regBtn').disabled = codeVal().length !== 6;
   }
+
+  $('codeInput').addEventListener('input', function () {
+    const v = codeVal().slice(0, 6);
+    if ($('codeInput').value !== v) $('codeInput').value = v;
+    show($('regError'), false);
+    validate();
+  });
+  $('codeInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !$('regBtn').disabled) $('regBtn').click();
+  });
 
   $('regBtn').onclick = function () {
     const btn = $('regBtn');
     btn.disabled = true;
     btn.textContent = 'Сохраняю…';
     show($('regError'), false);
-    call('registerWorker', ID, cities[pickCity].stores[pickBranch].id)
+    call('registerWorker', ID, codeVal())
       .then(function (r) {
         worker = r.worker;
         try { localStorage.setItem(REG_KEY, REG_VERSION); } catch (e) {}
@@ -376,7 +347,7 @@
         $('regError').textContent = e.message;
         show($('regError'), true);
       })
-      .then(function () { btn.textContent = 'Готово'; validate(); });
+      .then(function () { btn.textContent = 'Войти'; validate(); });
   };
   $('regCancel').onclick = function () { show($('register'), false); show($('main'), true); };
   $('editBtn').onclick = function () { openRegister(true); };
@@ -901,7 +872,6 @@
 
   // ---------- Старт ----------
   call('getMe', ID).then(function (r) {
-    cities = r.cities || [];
     worker = r.worker;
     show($('loading'), false);
     let regOk = false;
