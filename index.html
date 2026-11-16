@@ -628,10 +628,20 @@
       skip.onclick = function () { questionDone(card, null); };
 
       function val() { return inp.value.trim().replace(',', '.'); }
+      // Товар уже есть в этой записи — ответ прибавляем к нему (повторные упоминания складываются)
+      function prevQty() {
+        const p = sel && curItems.filter(function (it) { return it.row === sel.row; })[0];
+        return p ? Number(p.quantity) || 0 : 0;
+      }
+      function total(v) { return Math.round((prevQty() + Number(v)) * 1000) / 1000; }
       function upd() {
         const v = val();
         save.disabled = !sel || v === '' || !isFinite(Number(v));
-        save.textContent = sel ? 'Записать: ' + (v || '…') + ' ' + (sel.unit || '') : 'Выберите товар';
+        if (!sel) { save.textContent = 'Выберите товар'; return; }
+        const u = sel.unit ? ' ' + sel.unit : '';
+        save.textContent = prevQty() && v !== '' && isFinite(Number(v))
+          ? 'Записать: +' + v + u + ' (всего ' + total(v) + u + ')'
+          : 'Записать: ' + (v || '…') + u;
       }
       inp.addEventListener('input', function () { inp.value = inp.value.replace(/[^0-9.,]/g, ''); upd(); });
       save.onclick = function () {
@@ -639,8 +649,9 @@
         const v = val();
         save.disabled = true;
         save.textContent = 'Сохраняю…';
-        call('saveStock', ID, [{ row: sel.row, quantity: v }]).then(function (r) {
-          questionDone(card, { row: sel.row, name: sel.name, unit: sel.unit, quantity: Number(v) });
+        const t = total(v);
+        call('saveStock', ID, [{ row: sel.row, quantity: String(t) }]).then(function (r) {
+          questionDone(card, { row: sel.row, name: sel.name, unit: sel.unit, quantity: t });
           if (stockOpen) setStock(r);
         }).catch(function (e) {
           const n = document.createElement('div');
