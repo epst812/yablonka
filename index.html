@@ -146,6 +146,13 @@
   }
   .srow input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .srow input.changed { border-color: var(--accent); background: var(--accent-soft); }
+  .srow .ctl { display: flex; align-items: center; gap: 6px; flex: none; }
+  .del {
+    flex: none; min-width: 40px; height: 40px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--muted); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  .del.arm { background: var(--err-soft); color: var(--err); border-color: var(--err); font-size: 14px; }
+  .del:disabled { opacity: .5; cursor: default; }
   .note.ok { background: var(--accent-soft); color: var(--accent); }
   .install { display: flex; align-items: center; gap: 12px; }
   .install .txt { flex: 1; min-width: 0; }
@@ -680,6 +687,34 @@
     return m[4] + ' ' + (+m[3]) + ' ' + months[+m[2] - 1];
   }
 
+  // Кнопка удаления позиции из списания смены: первое нажатие — «Удалить?», второе — удаляет
+  function delButton(it, onDone, onErr) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'del';
+    b.textContent = '✕';
+    b.setAttribute('aria-label', 'Удалить: ' + it.name);
+    let timer = null;
+    b.onclick = function () {
+      if (!b.classList.contains('arm')) {
+        b.classList.add('arm');
+        b.textContent = 'Удалить?';
+        timer = setTimeout(function () { b.classList.remove('arm'); b.textContent = '✕'; }, 3000);
+        return;
+      }
+      clearTimeout(timer);
+      b.disabled = true;
+      b.textContent = '…';
+      call('saveStock', ID, [{ row: it.row, quantity: '' }]).then(onDone).catch(function (e) {
+        b.disabled = false;
+        b.classList.remove('arm');
+        b.textContent = '✕';
+        onErr(e.message);
+      });
+    };
+    return b;
+  }
+
   // Количество в карточке «Списание записано» можно поправить сразу
   function renderResult(items) {
     curItems = items;
@@ -702,7 +737,17 @@
         inp.classList.toggle('changed', resEdits[it.row] !== undefined);
         upd();
       });
-      row.appendChild(inp);
+      const ctl = document.createElement('div');
+      ctl.className = 'ctl';
+      ctl.appendChild(inp);
+      ctl.appendChild(delButton(it, function (r) {
+        renderResult(curItems.filter(function (x) { return x.row !== it.row; }));
+        const note = $('resNote');
+        note.className = 'note ok';
+        note.textContent = '🗑 Удалено: ' + it.name;
+        if (stockOpen) setStock(r);
+      }, function (m) { const note = $('resNote'); note.className = 'note err'; note.textContent = m; }));
+      row.appendChild(ctl);
       list.appendChild(row);
     });
     function upd() {
@@ -841,7 +886,17 @@
         inp.classList.toggle('changed', edits[it.row] !== undefined);
         updateSave();
       });
-      row.appendChild(inp);
+      const ctl = document.createElement('div');
+      ctl.className = 'ctl';
+      ctl.appendChild(inp);
+      if (it.quantity !== '') {
+        ctl.appendChild(delButton(it, function (r) {
+          setStock(r);
+          stockNote('ok', '🗑 Удалено: ' + it.name);
+          if (curItems.some(function (x) { return x.row === it.row; }) && $('resList')) renderResult(curItems.filter(function (x) { return x.row !== it.row; }));
+        }, function (m) { stockNote('err', m); }));
+      }
+      row.appendChild(ctl);
       list.appendChild(row);
     });
     if (!rows.length) {
